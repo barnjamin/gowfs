@@ -1,12 +1,14 @@
 package gowfs
 
-import "fmt"
-import "os"
-import "io"
-import "strconv"
-import "strings"
-import "net/url"
-import "net/http"
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"strconv"
+	"strings"
+)
 
 // Creates a new file and stores its content in HDFS.
 // See HDFS FileSystem.create()
@@ -68,16 +70,15 @@ func (fs *FileSystem) Create(
 	}
 
 	req, _ = http.NewRequest("PUT", u.String(), data)
+	req.Header.Add("Content-Type", "application/octet-stream")
 	rsp, err = fs.client.Do(req)
 	if err != nil {
-		fmt.Errorf("FileSystem.Create(%s) - bad url: %s", loc, err.Error())
-		return false, err
+		return false, fmt.Errorf("FileSystem.Create(%s) - bad url: %s", loc, err.Error())
 	}
+	defer rsp.Body.Close()
 
 	if rsp.StatusCode != http.StatusCreated {
-		defer rsp.Body.Close()
-		_, err = responseToHdfsData(rsp)
-		if err != nil {
+		if _, err = responseToHdfsData(rsp); err != nil {
 			return false, err
 		}
 		return false, fmt.Errorf("FileSystem.Create(%s) - File not created.  Server returned status %v", loc, rsp.StatusCode)
@@ -160,6 +161,7 @@ func (fs *FileSystem) Append(data io.Reader, p Path, buffersize int) (bool, erro
 
 	// extract returned url in header.
 	loc := rsp.Header.Get("Location")
+
 	u, err = url.ParseRequestURI(loc)
 	if err != nil {
 		return false, fmt.Errorf("Append(%s) - did not receive a valid URL from server.", loc)
@@ -170,13 +172,13 @@ func (fs *FileSystem) Append(data io.Reader, p Path, buffersize int) (bool, erro
 	if err != nil {
 		return false, err
 	}
+	defer rsp.Body.Close()
 
 	if rsp.StatusCode != http.StatusOK {
-		defer rsp.Body.Close()
-		_, err = responseToHdfsData(rsp)
-		if err != nil {
+		if _, err = responseToHdfsData(rsp); err != nil {
 			return false, err
 		}
+
 		return false, fmt.Errorf("Append(%s) - File not created.  Server returned status %v", loc, rsp.StatusCode)
 	}
 
